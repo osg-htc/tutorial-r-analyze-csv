@@ -4,156 +4,205 @@ ospool:
 path:
   path: 
 ---
-# Analyzing Chemical Spills Datasets (.csv files) 
+
+# Analyzing Multiple .csv Files with R
 ### <i>An OSPool Tutorial</i>
 
-Spills of hazardous materials, like petroleum, mercury, and battery acid, that can impact water and land quality are required to be reported to the United State's government by law. In this tutorial, we will analyze records provided by the state of New York on occurrences of spills of hazardous materials that occurred from 1950 to 2019.
+Spills of hazardous materials, like petroleum, mercury, and battery acid, that can impact water and land quality are required to be reported to the United State's government by law. In this tutorial, we will analyze records provided by the state of New York on occurances of spills of hazardous materials that occured from 1950 to 2019.
 
-The data used in this tutorial was collected from [https://catalog.data.gov/dataset/spill-incidents/resource/a8f9d3c8-c3fa-4ca1-a97a-55e55ca6f8c0](https://catalog.data.gov/dataset/spill-incidents/resource/a8f9d3c8-c3fa-4ca1-a97a-55e55ca6f8c0) and modified for teaching purposes. 
+The data used in this tutorial was collected from https://catalog.data.gov/dataset/spill-incidents/resource/a8f9d3c8-c3fa-4ca1-a97a-55e55ca6f8c0 and modified for teaching purposes. 
 
-To access all of the materials to complete this tutorial, first log into your OSPool access point and run the following command: `git clone https://github.com/OSGConnect/tutorial-spills-R/`.
+## What we're trying to achieve
 
-## Step 1: Get to Know Hazardous Spills Dataset
+You are a researcher analyzing a dataset of hazardous material spills. On your own computer, your R script loops through a directory of data files to analyze each one, one at a time. 
 
-Let's explore the data files that we will be analyzing. Before we do so, we must make sure we are in the tutorial directory (`tutorial-spills-R/`). We can do this by printing your working directory (`pwd`): 
+```
+# R code
+
+list_of_datasets <- Sys.glob("data/*.csv")
+
+for (datafile in list_of_datasets) {
+    data <- read.csv(datafile)
+    # do analysis
+    }
+```
+
+Suppose the analysis for each datafile took 1 hour. Looping through all of them would take multiple hours. 
+
+Our goal is to split apart this loop and run each analysis as its own job. First, we change our script to just analyze one dataset at a time, and we create a list of our data, just like the glob in the code above: 
+
+```
+# R code
+
+datafile <- args[1]
+# do analysis
+```
 
 
 ```bash
-pwd
+ls data/ > list_of_datasets.csv
 ```
-
-We should see something similar to `/home/jovyan/tutorial-spills-R/`, where `jovyan` could alternatively be your OSG account username. 
-
-Next, let's navigate to our `/data` directory and list (`ls`) the files inside of it: 
 
 
 ```bash
-cd data/
-ls
+cat list_of_datasets.csv
 ```
 
-We should see seven `.csv` files, one for each decade between 1950-2019.
+With our changed code, and our list of files, we can use HTCondor to submit a job for each file in the list: 
 
-To explore the contents of these files, we can use commands like `head -n 5 <fileName>` to view the first 5 lines of our data files. 
+```
+## HTCondor submit file 
+
+shell = Rscript spill_calculation.ospool.R $(dataset)
+
+### other options
+
+queue dataset from list_of_datasets.csv
+```
+
+Based on the `list_of_datasets.csv` file, how many jobs should be submitted? Let's submit them and see! 
 
 
 ```bash
-head -n 5 spills_1980_1989.csv  
+condor_submit many-spills.submit
 ```
-
-<span style="color:blue">We can also use the navigation bar on the left side of your notebook to double-click and open each comma-separated value ("csv") .csv file and see it in a table format, instead of a traditional command line rendering above.</span>
-
-## Step 2: Prepare the R Executable
-
-Next, we need to create an R script to analyze our datasets. An example of an R script can be found in our main tutorial directory, so let's navigate there: 
-
-
-```bash
-cd ../ # change directory to move one up
-ls # list files
-cat spill_calculation.r
-```
-
-Then let us print the contents of our executable script: 
-
-
-```bash
-cat spill_calculation.r
-```
-
-This script will read in different datasets as arguments and then will carry out summary statistics to print out the number of spills recorded per decade and the total size (in gallons) of the hazardous spills.
-
-## Step 3: Prepare Portable Software
-
-Some common software, like R, is provided by OSG using containers. Because of this, you do not need to install R yourself, you will just tell HTCondor what container to use for your jobs. Additionally, this tutorial just uses base-R and no special libraries, but if you need libraries (e.g., tidyverse, ggplot2) you can always install them in your R container. 
-
-A list of containers and other software provided by OSG staff can be found on our website [https://portal.osg-htc.org/documentation/](https://portal.osg-htc.org/documentation/), along with resources for learning how to add libraries to your container. 
-
-We will be using the R container for R 3.5.0, which is accessible under `/cvmfs/singularity.opensciencegrid.org/opensciencegrid/osgvo-r:3.5.0`, so we must make sure to tell HTCondor to fetch this container when starting each of our jobs. To learn how to tell HTCondor to do this, see below. 
-
-## Step 4: Prepare and Submit an HTCondor Submit File for One Test Job
-
-The HTCondor submit file tells the HTCondor how you would like your job to be run on your behalf.
-
-For example, you should specify what executable you want to run, if you want a container/the name of that container, the resources you would like available to your job, and any special requirements. 
-
-### Step 4A: Prepare and Submit an HTCondor Submit File
-
-A sample submit file to analyze our smallest dataset, `spills_1950_1959.csv`, might look like: 
-
-
-```bash
-cat R.submit
-```
-
-We can submit this job using `condor_submit <SubmitFile>`:
-
-
-```bash
-condor_submit R.submit
-```
-
-We can check on the status of our job in HTCondor's queue by running: 
 
 
 ```bash
 condor_q
 ```
 
-Once our job is done running, it will leave HTCondor's queue automatically. 
+Great! In a few minutes, all of your jobs should be done. Look at the outputs in the `output/` folder
 
-### Step 4B: Review Test Job Results
+
+```bash
+cat output/*
+```
+
+
+If each analysis would take an hour (or multiple hours), submitting the list of jobs will have saved a lot of time. 
+
+> Tip: While in this example we are using R as our programming language, and our data files are in a `.csv` format, the principles in this example can be applied to ANY research that involves looping through a list of files. 
+> * If your research problem can be expressed as looping through a list of files -- what kind of files? What program are you using for analysis? 
+> * If your research doesn't involving looping through a list of files, try to come up with 2-3 examples of people who might use this kind of workflow. 
+
+Let's now go through the step by step process to go from running a local script on your computer, to using the OSPool. Delete the files created in our test to start fresh: 
+
+
+```bash
+rm log/* error/* output/* 
+```
+
+## Step by step to get on the OSPool
+
+### Step 1: Changes to our R code
+
+Look at the original R script and then compare with the one used to run jobs on the OSPool
+
+
+```bash
+cat spill_calculation.original.R
+```
+
+
+```bash
+cat spill_calculation.ospool.R
+```
+
+<details>
+    <summary>Differences</summary>
+    The first script uses a "glob" to create a list of data files and then loops through the files one by one. The second script reads in a single file name from the command line, and only analyzes that file. 
+</details>
+
+One important feature we are using here is capturing arguments from the command line. On the OSPool, the R script will need to be run with a command like this: 
+
+```
+Rscript spill_calculation.ospool.R
+```
+
+In order to provide the names of different input files to the script, we are using R's `commandArgs()` function. This captures trailing arguments and allows us to use them inside the script. So if we run: 
+
+```
+Rscript spill_calculation.ospool.R spills_1950_1959.csv 
+```
+
+The `commandArgs()` function can capture the name of the file `spills_1950_1959.csv`, and we can then use it in our script. 
+
+> Tip: `commandArgs()` is specific to R, but most scripting languages have a similar functionality! Python, for example, has an option called `sys.argv` that is very similar. If you work with scripting languages, it is worth figuring out how to add arguments to your scripts. 
+
+### Step 2: Recreate our software environment with containers
+
+Some common software, like R, are provided by OSG using containers. Because of this, you do not need to install R yourself, you will just tell HTCondor what container to use for your jobs. Additionally, this tutorial just uses base-R and no special libraries, but if you need libraries (e.g., tidyverse, ggplot2) you can always install them in your R container. 
+
+A list of containers and other software provided by OSG staff can be found on our website [https://portal.osg-htc.org/documentation/](https://portal.osg-htc.org/documentation/), along with resources for learning how to add libraries to your container. 
+
+We will be using the R container for R 3.5.0, which is accessable under `/cvmfs/singularity.opensciencegrid.org/opensciencegrid/osgvo-r:3.5.0`, so we must make sure to tell HTCondor to fetch this container when starting each of our jobs. To learn how to tell HTCondor to do this, see below. 
+
+### Step 3: Upload data
+
+In this case, our data was included when we cloned the repository. However, if you were working with your own data, it's more likely that you would need to upload it to an OSPool Access Point like ap40 or ap41. 
+
+There are two different places to upload your data. You can learn more about them in this documentation page: [Data Staging and Transfer to Jobs](https://portal.osg-htc.org/documentation/htc_workloads/managing_data/overview/)
+
+### Step 4: Create a submit file
+
+The HTCondor submit file tells the HTCondor how you would like your job to be run on your behalf.
+
+For example, you should specify what executable you want run, if you want a container/the name of that container, the resources you would like available to your job, and any special requirements. When starting out, it's a good idea to just run ONE job at once!! This submit file does just that: 
+
+
+```bash
+cat one-spill.submit
+```
+
+Note that this submit file doesn't loop at all. It just sets one dataset name, and submits one job. 
+
+
+```bash
+condor_submit one-spill.submit
+```
+
+
+```bash
+condor_q
+```
+
+### Step 5: Review and scale up
 
 Once our job is done running, we can check the results by looking in our `output` folder: 
 
 
 ```bash
-cat output/spills.out
+cat output/*
 ```
 
 We should see that from 1950-1959, New York recorded five spills that totalled less than 0 recorded gallons. 
 
-## Step 5: Scale Out Your Workflow to Analyze Many Datasets
-
-We just prepared and ran one job analyzing the `spills_1950_1959.csv` dataset! But now, we want to analyze the remaining 6 datasets. Luckily, HTCondor is very helpful when it comes to rapidly queueing many small jobs!
-
-To do so, we will update our submit file to use the `queue <variable> from <list>` syntax. But before we do this, we need to create a list of the files we want to queue a job for:  
+We can also look at the end of the log file to see how many resources the job used: 
 
 
 ```bash
-ls data > list_of_datasets.txt
-cat list_of_datasets.txt
+tail log/*.log
 ```
 
-Great! Now we have a list of the files we want analyzed, where each file is on it's own seperate line. 
+If the job ran successfully, and our resource requests are accurate, you can proceed with submitting the whole batch of jobs. Generate a list of inputs if you haven't already: 
+```
+ls data/*.csv > list_of_datasets.csv
+```
 
-### Step 5A: Update submit file to queue a job for each dataset
-
-Now, let's modify the queue line of our submit file to use the new queue syntax. For this, we can choose almost any variable name, so for simplicity, let's choose `dataset` such that we have `queue dataset from list_of_datasets.txt`. 
-
-We can then call this new variable, `dataset`, elsewhere in our submit file by wrapping it with `$()` like so: `$(dataset)`. 
-
-Our updated submit file might look like this: 
+Then, modify the submit file to use a "looping" queue syntax. 
 
 
 ```bash
-cat many-R.submit
+tail -n 2 many-spills.submit
 ```
 
-### Step 5B: Submit Many Jobs
-
-Now we can submit our new submit file using `condor_submit` again:
+We've reached the completed example from the beginning: 
 
 
 ```bash
-condor_submit many-R.submit
+condor_submit many-spills.submit
 ```
-
-Notice that we have now queued 7 jobs using one submit file!
-
-### Step 5C: Analysis Completed!
-
-We can check on the status of our 7 jobs using `condor_q`:
 
 
 ```bash
